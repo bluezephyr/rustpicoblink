@@ -4,16 +4,15 @@
 use cortex_m::asm::nop;
 use cortex_m_rt::entry;
 use panic_halt as _;
-use rtt_target::{rprintln, rtt_init_print};
+use rp2040_boot2;
+
+#[link_section = ".boot2"]
+#[used]
+pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 
 #[entry]
-fn main() -> !{
-    rtt_init_print!();
-    rprintln!("Hello, world!");
+fn main() -> ! {
     loop {
-        rprintln!("Echo...");
-        for _ in 0..100_000 {
-            nop();
-        }
+        nop();
     }
 }
