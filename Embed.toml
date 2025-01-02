@@ -8,11 +8,11 @@ protocol = "Swd"
 speed = 20000
 
 [default.rtt]
-enabled = false
+enabled = true
 # timeout = 3000
 
 [default.reset]
 halt_afterwards = false
 
 [default.gdb]
-enabled = true
+enabled = false
