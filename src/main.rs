@@ -1,16 +1,28 @@
 #![no_std]
 #![no_main]
 
-use cortex_m::asm::nop;
-use cortex_m_rt::entry;
+use core::cell::Cell;
+use cortex_m::interrupt::Mutex;
+use cortex_m::{interrupt, peripheral::syst::SystClkSource};
+use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 use rp2040_boot2;
-use rp2040_pac::Peripherals;
+use rp2040_pac::{CorePeripherals, Peripherals};
 use rtt_target::{rprintln, rtt_init_print};
 
 #[link_section = ".boot2"]
 #[used]
 pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
+
+// Use a Mutex to protect the shared variable
+static LED_ON: Mutex<Cell<bool>> = Mutex::new(Cell::new(true));
+
+#[exception]
+fn SysTick() {
+    // Toggle the wanted LED state
+    interrupt::free(|led| LED_ON.borrow(led).set(!LED_ON.borrow(led).get()));
+    rprintln!("Tick!");
+}
 
 #[entry]
 fn main() -> ! {
@@ -19,6 +31,7 @@ fn main() -> ! {
 
     const LED: usize = 22;
     let p = Peripherals::take().unwrap();
+    let cp = CorePeripherals::take().unwrap();
 
     // Create a variable for the RESETS registers and clear bit 5 (IO_BANK0). Then wait
     // for the reset to take effect.
@@ -41,23 +54,22 @@ fn main() -> ! {
     let sio = p.SIO;
     sio.gpio_oe_set().write(|w| unsafe { w.bits(1 << LED) });
 
-    let mut on = true;
+    // Configure the SysTick
+    let mut syst = cp.SYST;
+    syst.set_clock_source(SystClkSource::External);
+    syst.set_reload(500_000);
+
+    syst.clear_current();
+    syst.enable_counter();
+    syst.enable_interrupt();
+
     loop {
-        if on {
+        if interrupt::free(|led| LED_ON.borrow(led).get()) {
             // Enable the LED
             sio.gpio_out_set().write(|w| unsafe { w.bits(1 << LED) });
         } else {
             // Disable the LED
             sio.gpio_out_clr().write(|w| unsafe { w.bits(1 << LED) })
         }
-
-        // Wait for a while
-        for _ in 0..10_000 {
-            nop();
-        }
-
-        // Toggle the wanted LED state
-        on = !on;
-        rprintln!("Loop!");
     }
 }
