@@ -1,9 +1,8 @@
 #![no_std]
 #![no_main]
 
-use core::cell::Cell;
-use cortex_m::interrupt::Mutex;
-use cortex_m::{interrupt, peripheral::syst::SystClkSource};
+use core::sync::atomic::{AtomicBool, Ordering};
+use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 use rp2040_boot2;
@@ -14,13 +13,13 @@ use rtt_target::{rprintln, rtt_init_print};
 #[used]
 pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 
-// Use a Mutex to protect the shared variable
-static LED_ON: Mutex<Cell<bool>> = Mutex::new(Cell::new(true));
+// Use an AtomicBool to allow access to the shared variable without using unsafe
+static LED_ON: AtomicBool = AtomicBool::new(true);
 
 #[exception]
 fn SysTick() {
     // Toggle the wanted LED state
-    interrupt::free(|led| LED_ON.borrow(led).set(!LED_ON.borrow(led).get()));
+    LED_ON.store(!LED_ON.load(Ordering::Relaxed), Ordering::Relaxed);
     rprintln!("Tick!");
 }
 
@@ -64,7 +63,7 @@ fn main() -> ! {
     syst.enable_interrupt();
 
     loop {
-        if interrupt::free(|led| LED_ON.borrow(led).get()) {
+        if LED_ON.load(Ordering::Relaxed) {
             // Enable the LED
             sio.gpio_out_set().write(|w| unsafe { w.bits(1 << LED) });
         } else {
