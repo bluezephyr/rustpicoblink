@@ -13,6 +13,35 @@ via a resistor (220 Ohm).
 * A [Raspberry Pi Debug
   Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html#about-the-debug-probe)
 
+
+## Software download
+
+There are basically to diffent ways to download the binary to the Raspberry Pi
+Pico; using a debug-probe or by loading a UF2 over USB. Details can be found on the
+[RP2040 project template
+page](https://github.com/rp-rs/rp2040-project-template?tab=readme-ov-file#running)
+
+### Using a debug Probe
+
+* Download the binary with `cargo embed` using the configuration in the `Embed.toml` file
+
+or
+
+* set the runner in the `config.toml` file to `runner = "probe-rs run --chip RP2040
+  --protocol swd"`
+* Download the binary using `cargo run`
+
+### Using UF2 over USB
+
+This method requires that `elf2uf2-rs` has been installed. Use `cargo install elf2uf2-rs
+--locked` to do this.
+
+* Set the runner in the `config.toml` file to `runner = "elf2uf2-rs -d"`
+* Boot the Raspberry Pi (RP2040) into USB Bootloader mode. On the Raspberry Pi, this is
+  done by holding the BOOTSEL button pressed when powering on the chip.
+* Mount the drive.
+* Download the binary using `cargo run`
+
 ## Minimal implementation
 
 A minimal implementation that runs on the Pi Pico is very similar to the "standard"
@@ -65,6 +94,10 @@ for the configuration is listed below. Details can be found in the[RP2040
 
 When the pin has beed configured, the output can be controlled using the SIO registers
 `GPIO_OUT_SET` and `GPIO_OUT_CLR`.
+
+## SysTick
+
+TBD
 
 
 ## Documentation
