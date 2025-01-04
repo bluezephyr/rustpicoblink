@@ -4,14 +4,18 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m_rt::{entry, exception};
+use embedded_hal::digital::{OutputPin, PinState};
 use panic_halt as _;
 use rp2040_boot2;
-use rp2040_pac::{CorePeripherals, Peripherals};
+use rp2040_hal as hal;
 use rtt_target::{rprintln, rtt_init_print};
 
 #[link_section = ".boot2"]
 #[used]
 pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
+
+// External high-speed crystal on the Raspberry Pi Pico board is 12 MHz
+const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
 // Use an AtomicBool to allow access to the shared variable without using unsafe and without
 // disabling interrupts.
@@ -31,47 +35,40 @@ fn main() -> ! {
     rtt_init_print!();
     rprintln!("Hello, world!");
 
-    const LED: usize = 22;
-    let p = Peripherals::take().unwrap();
-    let cp = CorePeripherals::take().unwrap();
+    let mut p = hal::pac::Peripherals::take().unwrap();
+    let cp = hal::pac::CorePeripherals::take().unwrap();
 
-    // Create a variable for the RESETS registers and clear bit 5 (IO_BANK0). Then wait
-    // for the reset to take effect.
-    let reset = p.RESETS;
-    reset
-        .reset()
-        .modify(|r, w| unsafe { w.bits(r.bits() & !(1 << 5)) });
-    while reset.reset_done().read().bits() & (1 << 5) == 0 {}
+    let sio = hal::Sio::new(p.SIO);
+    let pins = hal::gpio::Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
+    let mut led = pins.gpio22.into_push_pull_output();
 
-    // Write the value 5 (SIO) to the FUNCSEL to be able to control the GPIO using the
-    // SIO block. (Can be improved by using read, modify, write sequence to avoid that
-    // other pins are affected).
-    let io_bank0 = p.IO_BANK0;
-    io_bank0
-        .gpio(LED)
-        .gpio_ctrl()
-        .write(|w| unsafe { w.bits(5) });
+    // Set up the watchdog driver - needed by the clock setup code
+    let mut watchdog = hal::Watchdog::new(p.WATCHDOG);
 
-    // Enable output for the pin
-    let sio = p.SIO;
-    sio.gpio_oe_set().write(|w| unsafe { w.bits(1 << LED) });
+    // Configure the clocks
+    let _ = hal::clocks::init_clocks_and_plls(
+        XTAL_FREQ_HZ,
+        p.XOSC,
+        p.CLOCKS,
+        p.PLL_SYS,
+        p.PLL_USB,
+        &mut p.RESETS,
+        &mut watchdog,
+    )
+    .unwrap();
 
     // Configure the SysTick
     let mut syst = cp.SYST;
-    syst.set_clock_source(SystClkSource::Core);
-    syst.set_reload(1_500_000);
+    syst.set_clock_source(SystClkSource::External);
+    syst.set_reload(hal::pac::SYST::get_ticks_per_10ms() * 50);
 
     syst.clear_current();
     syst.enable_counter();
     syst.enable_interrupt();
 
+    rprintln!("{} ticks per ms (times 50 modifier applied)", hal::pac::SYST::get_ticks_per_10ms());
+
     loop {
-        if LED_ON.load(Ordering::Relaxed) {
-            // Enable the LED
-            sio.gpio_out_set().write(|w| unsafe { w.bits(1 << LED) });
-        } else {
-            // Disable the LED
-            sio.gpio_out_clr().write(|w| unsafe { w.bits(1 << LED) })
-        }
+        let _ = led.set_state(PinState::from(LED_ON.load(Ordering::Relaxed)));
     }
 }

@@ -94,7 +94,7 @@ SECTIONS {
 ## GPIO
 
 To turn on a LED, the corresponding GPIO pin needs to be configured. The needed operations
-for the configuration is listed below. Details can be found in the[RP2040
+for the configuration is listed below. Details can be found in the [RP2040
   datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf).
 
 * The `IO Bank0 peripheral` needs to be enabled (disabled at startup). This
