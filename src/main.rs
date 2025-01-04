@@ -13,12 +13,15 @@ use rtt_target::{rprintln, rtt_init_print};
 #[used]
 pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 
-// Use an AtomicBool to allow access to the shared variable without using unsafe
+// Use an AtomicBool to allow access to the shared variable without using unsafe and without
+// disabling interrupts.
 static LED_ON: AtomicBool = AtomicBool::new(true);
 
 #[exception]
 fn SysTick() {
     // Toggle the wanted LED state
+    // The `swap` method is not supported since thumbv6m only provide `load` and `store`
+    // operations. No support for CAS (Compare and Swap) operations, such as `swap`, etc.
     LED_ON.store(!LED_ON.load(Ordering::Relaxed), Ordering::Relaxed);
     rprintln!("Tick!");
 }
@@ -55,8 +58,8 @@ fn main() -> ! {
 
     // Configure the SysTick
     let mut syst = cp.SYST;
-    syst.set_clock_source(SystClkSource::External);
-    syst.set_reload(500_000);
+    syst.set_clock_source(SystClkSource::Core);
+    syst.set_reload(1_500_000);
 
     syst.clear_current();
     syst.enable_counter();
